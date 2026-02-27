@@ -56,3 +56,12 @@ body {
   -webkit-user-select: none;
   cursor: default;
 }
+
+/* AG Grid のフィルタポップアップを最前面に表示 */
+.ag-popup {
+  z-index: 9999 !important;
+}
+
+.ag-popup-child {
+  background-color: rgba(40, 40, 40, 0.98);
+}

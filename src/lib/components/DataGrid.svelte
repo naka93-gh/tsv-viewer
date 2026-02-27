@@ -16,8 +16,9 @@
 
   interface Props {
     file: ParsedFile;
+    searchQuery?: string;
   }
-  let { file }: Props = $props();
+  let { file, searchQuery = "" }: Props = $props();
 
   let gridContainer: HTMLDivElement;
   let gridApi: GridApi | undefined;
@@ -69,9 +70,11 @@
       defaultColDef: {
         flex: 1,
         minWidth: 100,
+        floatingFilter: true,
       },
       animateRows: false,
       suppressCellFocus: true,
+      quickFilterText: searchQuery,
     };
 
     gridApi = createGrid(gridContainer, gridOptions, {
@@ -82,6 +85,11 @@
       gridApi?.destroy();
       gridApi = undefined;
     };
+  });
+
+  /** searchQuery の変更を AG Grid に反映 */
+  $effect(() => {
+    gridApi?.setGridOption("quickFilterText", searchQuery);
   });
 </script>
 
