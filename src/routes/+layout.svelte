@@ -1,3 +1,9 @@
+<!--
+  ルートレイアウト。
+  - グローバル CSS (theme.css) の読み込み
+  - アプリ全体の縦方向 Flex レイアウト: タイトルバー + コンテンツ領域
+  - タイトルバーは macOS Overlay スタイル用のドラッグ領域
+-->
 <script lang="ts">
   import "$lib/theme.css";
 

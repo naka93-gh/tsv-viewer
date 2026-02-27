@@ -1,5 +1,14 @@
+<!-- ファイル未読込時の空状態画面。「ファイルを開く」ボタンでダイアログを表示する。 -->
 <script lang="ts">
-  /* ファイル未読込時の空状態画面 */
+  import { fileState } from "$lib/stores/tabs.svelte";
+
+  async function handleOpen() {
+    try {
+      await fileState.openDialog();
+    } catch (e) {
+      console.error("ファイルを開けませんでした:", e);
+    }
+  }
 </script>
 
 <div class="empty-state">
@@ -21,7 +30,9 @@
     </svg>
   </div>
 
-  <button class="open-button" type="button">ファイルを開く</button>
+  <button class="open-button" type="button" onclick={handleOpen}
+    >ファイルを開く</button
+  >
 
   <p class="hint">TSVファイルを選択、または D&D</p>
 </div>
@@ -50,7 +61,9 @@
     font-family: var(--font-ui);
     font-size: 13px;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+      background 0.15s,
+      color 0.15s;
   }
 
   .open-button:hover {
