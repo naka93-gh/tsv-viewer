@@ -1,0 +1,4 @@
+build/
+.svelte-kit/
+src-tauri/target/
+node_modules/
