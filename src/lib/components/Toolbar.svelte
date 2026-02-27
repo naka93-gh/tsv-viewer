@@ -1,10 +1,12 @@
-<!-- ツールバー。検索バーを提供する。 -->
+<!-- ツールバー。検索バーとモードトグルを提供する。 -->
 <script lang="ts">
   interface Props {
     searchQuery: string;
     onSearchChange: (query: string) => void;
+    mode: "view" | "edit";
+    onToggleMode: () => void;
   }
-  let { searchQuery, onSearchChange }: Props = $props();
+  let { searchQuery, onSearchChange, mode, onToggleMode }: Props = $props();
 
   let inputEl: HTMLInputElement | undefined = $state();
 
@@ -38,6 +40,29 @@
       class="search-input"
       placeholder="検索..."
     />
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="mode-toggle">
+    <button
+      class="mode-btn"
+      class:active={mode === "view"}
+      onclick={() => {
+        if (mode !== "view") onToggleMode();
+      }}
+    >
+      閲覧
+    </button>
+    <button
+      class="mode-btn"
+      class:active={mode === "edit"}
+      onclick={() => {
+        if (mode !== "edit") onToggleMode();
+      }}
+    >
+      編集
+    </button>
   </div>
 </div>
 
@@ -83,5 +108,37 @@
 
   .search-input::placeholder {
     color: var(--color-text-muted);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .mode-toggle {
+    display: flex;
+    border: 1px solid var(--color-border-strong);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+
+  .mode-btn {
+    all: unset;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition:
+      background 0.15s,
+      color 0.15s;
+  }
+
+  .mode-btn:hover {
+    color: var(--color-text-primary);
+    background: var(--color-surface-hover);
+  }
+
+  .mode-btn.active {
+    color: #fff;
+    background: var(--color-accent);
   }
 </style>

@@ -31,7 +31,12 @@
         tabindex="0"
         aria-selected={tab.id === tabStore.activeTabId}
       >
-        <span class="tab-label">{fileName(tab.file.path)}</span>
+        <span class="tab-label">
+          {fileName(tab.file.path)}
+          {#if tab.dirty}
+            <span class="dirty-marker">●</span>
+          {/if}
+        </span>
         <button
           class="tab-close"
           onclick={(e) => {
@@ -113,6 +118,11 @@
   .tab-label {
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .dirty-marker {
+    color: var(--color-unsaved-marker);
+    margin-left: 2px;
   }
 
   .tab-close {

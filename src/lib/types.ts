@@ -17,9 +17,28 @@ export interface ParsedFile {
   column_count: number;
 }
 
-/** タブ1つ分の状態。ファイルと検索クエリを保持する。 */
+/** セル編集・行追加・行削除の操作を表す共用体型。Undo/Redo で使用。 */
+export type EditOp =
+  | {
+      type: "cell";
+      rowIndex: number;
+      colIndex: number;
+      oldValue: string;
+      newValue: string;
+    }
+  | { type: "addRow"; rowIndex: number; row: string[] }
+  | { type: "deleteRow"; rowIndex: number; row: string[] };
+
+/** タブ1つ分の状態。ファイル・編集状態・Undo 履歴を保持する。 */
 export interface TabState {
   id: string;
   file: ParsedFile;
+  rows: string[][];
   searchQuery: string;
+  mode: "view" | "edit";
+  dirty: boolean;
+  undoStack: EditOp[];
+  redoStack: EditOp[];
+  /** 未保存の変更があるセル。キーは "rowIndex:colIndex" 形式。 */
+  dirtyCells: Set<string>;
 }

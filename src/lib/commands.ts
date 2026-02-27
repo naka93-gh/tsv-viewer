@@ -23,3 +23,15 @@ export async function openFileDialog(): Promise<string | null> {
 export async function openFile(path: string): Promise<ParsedFile> {
   return invoke<ParsedFile>("open_file", { path });
 }
+
+/**
+ * ヘッダーと行データを TSV 形式で指定パスに保存する。
+ */
+export async function saveFile(
+  path: string,
+  headers: string[],
+  rows: string[][],
+  encoding: string,
+): Promise<void> {
+  return invoke("save_file", { path, headers, rows, encoding });
+}
