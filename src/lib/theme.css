@@ -1,0 +1,59 @@
+/* TSV Viewer — Ghostty-inspired dark theme */
+
+:root {
+  /* 背景レイヤー */
+  --color-window-bg: transparent;
+  --color-surface: rgba(40, 40, 40, 0.95);
+  --color-surface-hover: rgba(55, 55, 55, 0.95);
+
+  /* テキスト */
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #888888;
+  --color-text-muted: #999999;
+
+  /* アクセント */
+  --color-accent: #7aa2f7;
+  --color-accent-subtle: rgba(122, 162, 247, 0.15);
+
+  /* ボーダー */
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.15);
+
+  /* セマンティック */
+  --color-unsaved-marker: #e0a050;
+  --color-error: #f7768e;
+
+  /* フォント */
+  --font-ui: system-ui, -apple-system, sans-serif;
+  --font-mono: "SF Mono", Menlo, monospace;
+}
+
+/* リセット */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+  background: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* デスクトップアプリとしてのデフォルト */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
