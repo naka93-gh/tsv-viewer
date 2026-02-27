@@ -16,3 +16,10 @@ export interface ParsedFile {
   /** カラム数 */
   column_count: number;
 }
+
+/** タブ1つ分の状態。ファイルと検索クエリを保持する。 */
+export interface TabState {
+  id: string;
+  file: ParsedFile;
+  searchQuery: string;
+}

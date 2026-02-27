@@ -2,8 +2,9 @@
 <script lang="ts">
   interface Props {
     searchQuery: string;
+    onSearchChange: (query: string) => void;
   }
-  let { searchQuery = $bindable() }: Props = $props();
+  let { searchQuery, onSearchChange }: Props = $props();
 
   let inputEl: HTMLInputElement | undefined = $state();
 
@@ -31,7 +32,8 @@
     </svg>
     <input
       bind:this={inputEl}
-      bind:value={searchQuery}
+      value={searchQuery}
+      oninput={(e) => onSearchChange(e.currentTarget.value)}
       type="text"
       class="search-input"
       placeholder="検索..."

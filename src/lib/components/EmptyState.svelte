@@ -1,10 +1,10 @@
 <!-- ファイル未読込時の空状態画面。「ファイルを開く」ボタンでダイアログを表示する。 -->
 <script lang="ts">
-  import { fileState } from "$lib/stores/tabs.svelte";
+  import { tabStore } from "$lib/stores/tabs.svelte";
 
   async function handleOpen() {
     try {
-      await fileState.openDialog();
+      await tabStore.openDialog();
     } catch (e) {
       console.error("ファイルを開けませんでした:", e);
     }
