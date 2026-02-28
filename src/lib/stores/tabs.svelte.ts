@@ -1,5 +1,10 @@
 /** マルチタブ状態管理。編集モード・Undo/Redo・保存をサポートする。 */
-import { openFile, openFileDialog, saveFile } from "$lib/commands";
+import {
+  openFile,
+  openFileDialog,
+  saveFile,
+  saveFileDialog,
+} from "$lib/commands";
 import { toastStore } from "$lib/stores/toast.svelte";
 import type { EditOp, TabState } from "$lib/types";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -125,6 +130,31 @@ class TabStore {
     }
   }
 
+  /** 空の新規タブを作成する。 */
+  createNew(): void {
+    const id = generateId();
+    this.tabs.push({
+      id,
+      file: {
+        headers: ["Column1"],
+        rows: [],
+        encoding: "UTF-8",
+        path: "",
+        row_count: 0,
+        column_count: 1,
+        line_ending: "LF",
+      },
+      rows: [],
+      searchQuery: "",
+      mode: "edit",
+      dirty: false,
+      undoStack: [],
+      redoStack: [],
+      dirtyCells: new SvelteSet(),
+    });
+    this.activeTabId = id;
+  }
+
   /** ファイル選択ダイアログを表示し、選択されたファイルを新タブで開く。 */
   async openDialog(): Promise<void> {
     const path = await openFileDialog();
@@ -136,6 +166,21 @@ class TabStore {
   /** 指定タブをアクティブにする。 */
   activate(tabId: string): void {
     this.activeTabId = tabId;
+  }
+
+  /** 次のタブをアクティブにする。末尾なら先頭に戻る。 */
+  activateNext(): void {
+    if (this.tabs.length <= 1) return;
+    const idx = this.tabs.findIndex((t) => t.id === this.activeTabId);
+    this.activeTabId = this.tabs[(idx + 1) % this.tabs.length].id;
+  }
+
+  /** 前のタブをアクティブにする。先頭なら末尾に戻る。 */
+  activatePrev(): void {
+    if (this.tabs.length <= 1) return;
+    const idx = this.tabs.findIndex((t) => t.id === this.activeTabId);
+    this.activeTabId =
+      this.tabs[(idx - 1 + this.tabs.length) % this.tabs.length].id;
   }
 
   /** 指定タブを閉じる。dirty 時は確認ダイアログを表示する。 */
@@ -256,10 +301,48 @@ class TabStore {
     return op;
   }
 
-  /** アクティブタブを上書き保存する。 */
+  /** 名前を付けて保存。ダイアログで選択されたパスに保存する。 */
+  async saveAs(): Promise<void> {
+    const tab = this.activeTab;
+    if (!tab) return;
+
+    const newPath = await saveFileDialog(tab.file.path || undefined);
+    if (!newPath) return;
+
+    try {
+      const headers = $state.snapshot(tab.file.headers);
+      const rows = $state.snapshot(tab.rows);
+
+      await saveFile(
+        newPath,
+        headers,
+        rows,
+        tab.file.encoding,
+        tab.file.line_ending,
+      );
+      tab.file.path = newPath;
+      tab.file.rows = rows;
+      tab.rows = [...rows];
+      tab.file.row_count = rows.length;
+      tab.dirty = false;
+      tab.undoStack = [];
+      tab.redoStack = [];
+      tab.dirtyCells = new SvelteSet();
+      const name = newPath.split("/").pop() ?? newPath;
+      toastStore.success(`${name} に保存しました`);
+    } catch (e) {
+      toastStore.error(`保存に失敗しました: ${e}`);
+    }
+  }
+
+  /** アクティブタブを上書き保存する。パスが未設定の場合は名前を付けて保存にフォールバック。 */
   async save(): Promise<void> {
     const tab = this.activeTab;
     if (!tab || !tab.dirty) return;
+
+    if (!tab.file.path) {
+      return this.saveAs();
+    }
 
     try {
       // Svelte プロキシを剥がしてプレーンデータにしてから Tauri に渡す

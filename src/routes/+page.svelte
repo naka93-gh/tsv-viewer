@@ -2,7 +2,7 @@
   メインページ。
   - タブ未選択 → EmptyState を表示
   - タブ選択済み → Toolbar + DataGrid + StatusBar を表示
-  - キーボードショートカット: Ctrl+E, Ctrl+S, Ctrl+Z, Ctrl+Shift+Z
+  - キーボードショートカット: Ctrl+O, Ctrl+W, Ctrl+E, Ctrl+S, Ctrl+Z, Ctrl+Shift+Z, Ctrl+Tab/Shift+Tab
   - Tauri の D&D イベントを購読し、ドロップされた TSV/TXT を自動で開く
 -->
 <script lang="ts">
@@ -10,6 +10,7 @@
   import EmptyState from "$lib/components/EmptyState.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
   import Toolbar from "$lib/components/Toolbar.svelte";
+  import { createShortcutManager } from "$lib/shortcuts";
   import { tabStore } from "$lib/stores/tabs.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -22,29 +23,31 @@
   );
 
   /** キーボードショートカット */
-  function handleKeydown(e: KeyboardEvent) {
-    const mod = e.ctrlKey || e.metaKey;
-    if (!mod) return;
-
-    if (e.key === "e") {
-      e.preventDefault();
-      tabStore.toggleMode();
-    } else if (e.key === "s") {
-      e.preventDefault();
-      tabStore.save();
-    } else if (e.key === "z" && e.shiftKey) {
-      e.preventDefault();
-      tabStore.redo();
-    } else if (e.key === "z") {
-      e.preventDefault();
-      tabStore.undo();
-    }
-  }
+  const shortcuts = createShortcutManager();
+  shortcuts.register("Mod+n", () => tabStore.createNew());
+  shortcuts.register("Mod+o", () => tabStore.openDialog());
+  shortcuts.register("Mod+w", () => {
+    if (tabStore.activeTab) tabStore.close(tabStore.activeTab.id);
+  });
+  shortcuts.register("Mod+e", () => tabStore.toggleMode());
+  shortcuts.register("Mod+s", () => tabStore.save());
+  shortcuts.register("Mod+Shift+s", () => tabStore.saveAs());
+  shortcuts.register("Mod+Shift+z", () => tabStore.redo());
+  shortcuts.register("Mod+z", () => tabStore.undo());
+  shortcuts.register("Mod+Tab", () => tabStore.activateNext());
+  shortcuts.register("Mod+Shift+Tab", () => tabStore.activatePrev());
+  shortcuts.register("Mod+PageDown", () => tabStore.activateNext());
+  shortcuts.register("Mod+PageUp", () => tabStore.activatePrev());
+  shortcuts.register("Mod+f", () => {
+    const el = document.querySelector<HTMLInputElement>(".search-input");
+    el?.focus();
+    el?.select();
+  });
 
   $effect(() => {
     // capture phase で登録し、AG Grid が stopPropagation しても受け取れるようにする
-    window.addEventListener("keydown", handleKeydown, true);
-    return () => window.removeEventListener("keydown", handleKeydown, true);
+    window.addEventListener("keydown", shortcuts.handle, true);
+    return () => window.removeEventListener("keydown", shortcuts.handle, true);
   });
 
   /** Tauri のファイル D&D イベントを購読 */

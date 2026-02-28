@@ -3,7 +3,7 @@
  * Rust バックエンドの呼び出しをここに集約する。
  */
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import type { ParsedFile } from "./types";
 
 /**
@@ -12,6 +12,20 @@ import type { ParsedFile } from "./types";
  */
 export async function openFileDialog(): Promise<string | null> {
   const path = await open({
+    filters: [{ name: "TSV", extensions: ["tsv", "txt"] }],
+  });
+  return path;
+}
+
+/**
+ * 保存先を選択するダイアログを開き、選択されたパスを返す。
+ * キャンセル時は null。
+ */
+export async function saveFileDialog(
+  defaultPath?: string,
+): Promise<string | null> {
+  const path = await save({
+    defaultPath,
     filters: [{ name: "TSV", extensions: ["tsv", "txt"] }],
   });
   return path;

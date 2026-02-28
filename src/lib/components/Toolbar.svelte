@@ -9,20 +9,6 @@
   let { searchQuery, onSearchChange, mode, onToggleMode }: Props = $props();
 
   let inputEl: HTMLInputElement | undefined = $state();
-
-  /** Ctrl+F (macOS: Cmd+F) で検索バーにフォーカス */
-  function handleKeydown(e: KeyboardEvent) {
-    if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-      e.preventDefault();
-      inputEl?.focus();
-      inputEl?.select();
-    }
-  }
-
-  $effect(() => {
-    window.addEventListener("keydown", handleKeydown);
-    return () => window.removeEventListener("keydown", handleKeydown);
-  });
 </script>
 
 <div class="toolbar">
