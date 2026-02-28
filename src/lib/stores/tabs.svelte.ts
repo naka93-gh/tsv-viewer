@@ -266,7 +266,13 @@ class TabStore {
       const headers = $state.snapshot(tab.file.headers);
       const rows = $state.snapshot(tab.rows);
 
-      await saveFile(tab.file.path, headers, rows, tab.file.encoding);
+      await saveFile(
+        tab.file.path,
+        headers,
+        rows,
+        tab.file.encoding,
+        tab.file.line_ending,
+      );
       tab.file.rows = rows;
       tab.rows = [...rows];
       tab.file.row_count = rows.length;

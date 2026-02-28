@@ -15,13 +15,20 @@ pub struct ParsedFile {
     pub row_count: usize,
     /// カラム数
     pub column_count: usize,
+    /// 改行コード ("LF" or "CRLF")
+    pub line_ending: String,
 }
 
 /// TSV テキストをパースして ParsedFile を返す。
 ///
 /// csv クレートをタブ区切りモードで使用。
 /// flexible(true) により、カラム数が行ごとに異なっていてもエラーにしない。
-pub fn parse_tsv(text: &str, path: &str, encoding: &str) -> Result<ParsedFile, String> {
+pub fn parse_tsv(
+    text: &str,
+    path: &str,
+    encoding: &str,
+    line_ending: &str,
+) -> Result<ParsedFile, String> {
     let mut reader = csv::ReaderBuilder::new()
         .delimiter(b'\t')
         .has_headers(true)
@@ -55,6 +62,7 @@ pub fn parse_tsv(text: &str, path: &str, encoding: &str) -> Result<ParsedFile, S
         path: path.to_string(),
         row_count,
         column_count,
+        line_ending: line_ending.to_string(),
     })
 }
 
@@ -65,7 +73,7 @@ mod tests {
     #[test]
     fn parse_basic_tsv() {
         let text = "名前\t年齢\t都市\n田中\t30\t東京\n鈴木\t25\t大阪";
-        let result = parse_tsv(text, "/test.tsv", "UTF-8").unwrap();
+        let result = parse_tsv(text, "/test.tsv", "UTF-8", "LF").unwrap();
         assert_eq!(result.headers, vec!["名前", "年齢", "都市"]);
         assert_eq!(result.rows.len(), 2);
         assert_eq!(result.row_count, 2);

@@ -15,6 +15,8 @@ export interface ParsedFile {
   row_count: number;
   /** カラム数 */
   column_count: number;
+  /** 改行コード ("LF" or "CRLF") */
+  line_ending: string;
 }
 
 /** セル編集・行追加・行削除の操作を表す共用体型。Undo/Redo で使用。 */

@@ -25,6 +25,8 @@
   <span class="sep">&vert;</span>
   <span class="item">{file.encoding}</span>
   <span class="sep">&vert;</span>
+  <span class="item">{file.line_ending}</span>
+  <span class="sep">&vert;</span>
   <span class="item">{dimensions}</span>
   <div class="spacer"></div>
   <span class="item mode" class:editing={mode === "edit"}>{modeLabel}</span>

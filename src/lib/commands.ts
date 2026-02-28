@@ -32,6 +32,7 @@ export async function saveFile(
   headers: string[],
   rows: string[][],
   encoding: string,
+  lineEnding: string,
 ): Promise<void> {
-  return invoke("save_file", { path, headers, rows, encoding });
+  return invoke("save_file", { path, headers, rows, encoding, lineEnding });
 }

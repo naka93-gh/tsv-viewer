@@ -22,6 +22,15 @@ pub fn detect_and_decode(bytes: &[u8]) -> (String, String) {
     (decoded.into_owned(), encoding_name)
 }
 
+/// テキストの改行コードを検出する。CRLF を含めば "CRLF"、そうでなければ "LF"。
+pub fn detect_line_ending(text: &str) -> &'static str {
+    if text.contains("\r\n") {
+        "CRLF"
+    } else {
+        "LF"
+    }
+}
+
 /// UTF-8 テキストを指定エンコーディングにエンコードしてバイト列を返す。
 pub fn encode(text: &str, encoding_name: &str) -> Result<Vec<u8>, String> {
     let encoding = encoding_rs::Encoding::for_label(encoding_name.as_bytes())
@@ -34,7 +43,9 @@ pub fn encode(text: &str, encoding_name: &str) -> Result<Vec<u8>, String> {
 
     let (encoded, _, had_errors) = encoding.encode(text);
     if had_errors {
-        return Err(format!("{encoding_name} でエンコードできない文字が含まれています"));
+        return Err(format!(
+            "{encoding_name} でエンコードできない文字が含まれています"
+        ));
     }
     Ok(encoded.into_owned())
 }
@@ -76,5 +87,20 @@ mod tests {
     fn encode_unknown_encoding() {
         let result = encode("test", "UNKNOWN-999");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn detect_lf() {
+        assert_eq!(detect_line_ending("a\nb\nc"), "LF");
+    }
+
+    #[test]
+    fn detect_crlf() {
+        assert_eq!(detect_line_ending("a\r\nb\r\nc"), "CRLF");
+    }
+
+    #[test]
+    fn detect_empty() {
+        assert_eq!(detect_line_ending("no newline"), "LF");
     }
 }

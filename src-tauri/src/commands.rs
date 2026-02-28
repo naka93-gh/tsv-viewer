@@ -7,7 +7,8 @@ use std::fs;
 pub fn open_file(path: String) -> Result<ParsedFile, String> {
     let bytes = fs::read(&path).map_err(|e| format!("ファイルの読み込みに失敗: {e}"))?;
     let (text, enc) = encoding::detect_and_decode(&bytes);
-    parser::parse_tsv(&text, &path, &enc)
+    let line_ending = encoding::detect_line_ending(&text);
+    parser::parse_tsv(&text, &path, &enc, line_ending)
 }
 
 /// ヘッダーと行データを TSV 形式で指定パスに保存する。
@@ -18,13 +19,15 @@ pub fn save_file(
     headers: Vec<String>,
     rows: Vec<Vec<String>>,
     encoding: String,
+    line_ending: String,
 ) -> Result<(), String> {
     let mut lines: Vec<String> = Vec::with_capacity(rows.len() + 1);
     lines.push(headers.join("\t"));
     for row in &rows {
         lines.push(row.join("\t"));
     }
-    let text = lines.join("\n");
+    let separator = if line_ending == "CRLF" { "\r\n" } else { "\n" };
+    let text = lines.join(separator);
 
     let bytes = encoding::encode(&text, &encoding)?;
     fs::write(&path, bytes).map_err(|e| format!("ファイルの保存に失敗: {e}"))
