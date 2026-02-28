@@ -128,9 +128,8 @@
     };
   }
 
-  /** コンポーネントマウント時に AG Grid を初期化。mode の変更でのみ再作成する。 */
+  /** AG Grid を初期化。mode の変更で再作成する。タブ切り替えは親の {#key} で処理。 */
   $effect(() => {
-    // mode だけを追跡。他は全て untrack で依存から除外する。
     const isEditable = mode === "edit";
 
     untrack(() => {

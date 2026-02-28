@@ -97,17 +97,19 @@
     {mode}
     onToggleMode={() => tabStore.toggleMode()}
   />
-  <DataGrid
-    file={tabStore.activeTab.file}
-    {rows}
-    {searchQuery}
-    {mode}
-    {dirtyCells}
-    lastGridOp={tabStore.lastGridOp}
-    onCellEdit={(op) => tabStore.applyEdit(op)}
-    onAddRow={(rowIndex, position) => tabStore.addRow(rowIndex, position)}
-    onDeleteRow={(rowIndex) => tabStore.deleteRow(rowIndex)}
-  />
+  {#key tabStore.activeTabId}
+    <DataGrid
+      file={tabStore.activeTab.file}
+      {rows}
+      {searchQuery}
+      {mode}
+      {dirtyCells}
+      lastGridOp={tabStore.lastGridOp}
+      onCellEdit={(op) => tabStore.applyEdit(op)}
+      onAddRow={(rowIndex, position) => tabStore.addRow(rowIndex, position)}
+      onDeleteRow={(rowIndex) => tabStore.deleteRow(rowIndex)}
+    />
+  {/key}
   <StatusBar file={tabStore.activeTab.file} rowCount={rows.length} {mode} />
 {:else}
   <EmptyState />
