@@ -29,6 +29,18 @@ export type EditOp =
   | { type: "addRow"; rowIndex: number; row: string[] }
   | { type: "deleteRow"; rowIndex: number; row: string[] };
 
+/** トーストの種別 */
+export type ToastType = "success" | "error" | "warning" | "info";
+
+/** トースト1件の状態 */
+export interface Toast {
+  id: string;
+  type: ToastType;
+  message: string;
+  /** 表示時間（ms）。0 = 手動で閉じるまで表示 */
+  duration: number;
+}
+
 /** タブ1つ分の状態。ファイル・編集状態・Undo 履歴を保持する。 */
 export interface TabState {
   id: string;

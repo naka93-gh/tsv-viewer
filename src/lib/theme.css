@@ -22,6 +22,9 @@
   /* セマンティック */
   --color-unsaved-marker: #e0a050;
   --color-error: #f7768e;
+  --color-success: #9ece6a;
+  --color-warning: #e0af68;
+  --color-info: #7aa2f7;
 
   /* フォント */
   --font-ui: system-ui, -apple-system, sans-serif;

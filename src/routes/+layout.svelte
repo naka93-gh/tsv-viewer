@@ -8,6 +8,7 @@
 <script lang="ts">
   import "$lib/theme.css";
   import TitleBar from "$lib/components/TitleBar.svelte";
+  import ToastContainer from "$lib/components/ToastContainer.svelte";
   import { tabStore } from "$lib/stores/tabs.svelte";
 
   let { children } = $props();
@@ -22,6 +23,7 @@
   <div class="content">
     {@render children()}
   </div>
+  <ToastContainer />
 </div>
 
 <style>
