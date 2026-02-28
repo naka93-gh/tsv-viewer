@@ -11,7 +11,6 @@
   import StatusBar from "$lib/components/StatusBar.svelte";
   import Toolbar from "$lib/components/Toolbar.svelte";
   import { tabStore } from "$lib/stores/tabs.svelte";
-  import type { EditOp } from "$lib/types";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
   let searchQuery = $derived(tabStore.activeTab?.searchQuery ?? "");
@@ -20,43 +19,6 @@
   let dirtyCells = $derived(
     tabStore.activeTab?.dirtyCells ?? new Set<string>(),
   );
-
-  let dataGrid: DataGrid | undefined = $state();
-
-  /** セル編集コールバック */
-  function handleCellEdit(op: EditOp): void {
-    tabStore.applyEdit(op);
-    // AG Grid は自身で値を更新済みなので refreshGrid は不要
-  }
-
-  /** 行追加 */
-  function handleAddRow(rowIndex: number, position: "above" | "below"): void {
-    const tab = tabStore.activeTab;
-    if (!tab) return;
-
-    const insertIndex = position === "above" ? rowIndex : rowIndex + 1;
-    const emptyRow = new Array(tab.file.headers.length).fill("");
-
-    tabStore.applyEdit({
-      type: "addRow",
-      rowIndex: insertIndex,
-      row: emptyRow,
-    });
-    dataGrid?.refreshGrid();
-  }
-
-  /** 行削除 */
-  function handleDeleteRow(rowIndex: number): void {
-    const tab = tabStore.activeTab;
-    if (!tab || rowIndex < 0 || rowIndex >= tab.rows.length) return;
-
-    tabStore.applyEdit({
-      type: "deleteRow",
-      rowIndex,
-      row: [...tab.rows[rowIndex]],
-    });
-    dataGrid?.refreshGrid();
-  }
 
   /** キーボードショートカット */
   function handleKeydown(e: KeyboardEvent) {
@@ -68,18 +30,13 @@
       tabStore.toggleMode();
     } else if (e.key === "s") {
       e.preventDefault();
-      tabStore
-        .save()
-        .then(() => dataGrid?.refreshGrid())
-        .catch((err) => console.error("保存に失敗:", err));
+      tabStore.save().catch((err) => console.error("保存に失敗:", err));
     } else if (e.key === "z" && e.shiftKey) {
       e.preventDefault();
-      const op = tabStore.redo();
-      if (op) dataGrid?.refreshGrid();
+      tabStore.redo();
     } else if (e.key === "z") {
       e.preventDefault();
-      const op = tabStore.undo();
-      if (op) dataGrid?.refreshGrid();
+      tabStore.undo();
     }
   }
 
@@ -135,15 +92,15 @@
     onToggleMode={() => tabStore.toggleMode()}
   />
   <DataGrid
-    bind:this={dataGrid}
     file={tabStore.activeTab.file}
     {rows}
     {searchQuery}
     {mode}
     {dirtyCells}
-    onCellEdit={handleCellEdit}
-    onAddRow={handleAddRow}
-    onDeleteRow={handleDeleteRow}
+    lastGridOp={tabStore.lastGridOp}
+    onCellEdit={(op) => tabStore.applyEdit(op)}
+    onAddRow={(rowIndex, position) => tabStore.addRow(rowIndex, position)}
+    onDeleteRow={(rowIndex) => tabStore.deleteRow(rowIndex)}
   />
   <StatusBar file={tabStore.activeTab.file} rowCount={rows.length} {mode} />
 {:else}

@@ -24,6 +24,7 @@
     searchQuery?: string;
     mode: "view" | "edit";
     dirtyCells: Set<string>;
+    lastGridOp: { version: number; op: EditOp } | null;
     onCellEdit: (op: EditOp) => void;
     onAddRow: (rowIndex: number, position: "above" | "below") => void;
     onDeleteRow: (rowIndex: number) => void;
@@ -34,6 +35,7 @@
     searchQuery = "",
     mode,
     dirtyCells,
+    lastGridOp,
     onCellEdit,
     onAddRow,
     onDeleteRow,
@@ -126,41 +128,40 @@
     };
   }
 
-  /** コンポーネントマウント時に AG Grid を初期化。file / mode の変更で再作成する。 */
+  /** コンポーネントマウント時に AG Grid を初期化。mode の変更でのみ再作成する。 */
   $effect(() => {
-    if (!gridContainer) return;
-
+    // mode だけを追跡。他は全て untrack で依存から除外する。
     const isEditable = mode === "edit";
 
-    // rows, searchQuery, dirtyCells はグリッド再作成の依存に含めない
-    const initialRows = untrack(() => rows);
-    const initialSearch = untrack(() => searchQuery);
-    dirtyCellsRef = untrack(() => dirtyCells);
+    untrack(() => {
+      if (!gridContainer) return;
 
-    const gridOptions: GridOptions = {
-      theme: customTheme,
-      columnDefs: buildColDefs(file.headers, isEditable),
-      rowData: buildRowData(initialRows),
-      defaultColDef: {
-        flex: 1,
-        minWidth: 100,
-        floatingFilter: true,
-        cellStyle: (params) => {
-          const key = `${params.data?._rowIndex}:${params.colDef?.field}`;
-          if (dirtyCellsRef.has(key)) {
-            return { backgroundColor: "rgba(224, 160, 80, 0.12)" };
-          }
-          return null;
+      const gridOptions: GridOptions = {
+        theme: customTheme,
+        columnDefs: buildColDefs(file.headers, isEditable),
+        rowData: buildRowData(rows),
+        defaultColDef: {
+          flex: 1,
+          minWidth: 100,
+          floatingFilter: true,
+          cellStyle: (params) => {
+            const key = `${params.data?._rowIndex}:${params.colDef?.field}`;
+            if (dirtyCellsRef.has(key)) {
+              return { backgroundColor: "rgba(224, 160, 80, 0.12)" };
+            }
+            return null;
+          },
         },
-      },
-      animateRows: false,
-      suppressCellFocus: !isEditable,
-      quickFilterText: initialSearch,
-      onCellValueChanged: handleCellValueChanged,
-    };
+        animateRows: false,
+        suppressCellFocus: !isEditable,
+        quickFilterText: searchQuery,
+        onCellValueChanged: handleCellValueChanged,
+      };
 
-    gridApi = createGrid(gridContainer, gridOptions, {
-      modules: [AllCommunityModule],
+      dirtyCellsRef = dirtyCells;
+      gridApi = createGrid(gridContainer, gridOptions, {
+        modules: [AllCommunityModule],
+      });
     });
 
     return () => {
@@ -174,18 +175,63 @@
     gridApi?.setGridOption("quickFilterText", searchQuery);
   });
 
-  /** dirtyCells の変更時にセルスタイルを再評価する */
+  /** 操作に応じた差分更新。applyTransaction で行追加・削除、セルは直接更新。 */
+  let prevOpVersion = -1;
   $effect(() => {
-    dirtyCellsRef = dirtyCells;
-    gridApi?.refreshCells({ force: true });
+    const pending = lastGridOp;
+    if (!pending) return;
+    if (pending.version === prevOpVersion) return;
+    if (prevOpVersion === -1) {
+      prevOpVersion = pending.version;
+      return;
+    }
+    prevOpVersion = pending.version;
+    untrack(() => {
+      if (!gridApi) return;
+      const { op } = pending;
+      switch (op.type) {
+        case "addRow": {
+          // 挿入位置以降の _rowIndex を +1
+          gridApi.forEachNode((node) => {
+            const idx = node.data._rowIndex as number;
+            if (idx >= op.rowIndex) node.data._rowIndex = idx + 1;
+          });
+          const newRow: Record<string, string | number> = {
+            _rowIndex: op.rowIndex,
+          };
+          op.row.forEach((val, i) => {
+            newRow[String(i)] = val;
+          });
+          gridApi.applyTransaction({ add: [newRow], addIndex: op.rowIndex });
+          break;
+        }
+        case "deleteRow": {
+          // 削除対象を探して除去し、後続の _rowIndex を -1
+          let target: Record<string, string | number> | null = null;
+          gridApi.forEachNode((node) => {
+            if (node.data._rowIndex === op.rowIndex) target = node.data;
+          });
+          if (target) gridApi.applyTransaction({ remove: [target] });
+          gridApi.forEachNode((node) => {
+            const idx = node.data._rowIndex as number;
+            if (idx > op.rowIndex) node.data._rowIndex = idx - 1;
+          });
+          break;
+        }
+        case "cell": {
+          // セル値を直接更新
+          gridApi.forEachNode((node) => {
+            if (node.data._rowIndex === op.rowIndex) {
+              node.data[String(op.colIndex)] = op.newValue;
+            }
+          });
+          break;
+        }
+      }
+      dirtyCellsRef = dirtyCells;
+      gridApi.refreshCells({ force: true });
+    });
   });
-
-  /** 外部から呼ばれた際に Grid を更新する（行追加・削除・Undo/Redo 後） */
-  export function refreshGrid(): void {
-    if (!gridApi) return;
-    dirtyCellsRef = dirtyCells;
-    gridApi.setGridOption("rowData", buildRowData(rows));
-  }
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->

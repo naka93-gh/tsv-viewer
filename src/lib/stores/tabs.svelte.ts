@@ -25,6 +25,7 @@ function invertOp(op: EditOp): EditOp {
 function applyOpToRows(rows: string[][], op: EditOp): void {
   switch (op.type) {
     case "cell":
+      rows[op.rowIndex] = [...rows[op.rowIndex]];
       rows[op.rowIndex][op.colIndex] = op.newValue;
       break;
     case "addRow":
@@ -79,6 +80,9 @@ function rebuildDirtyCells(tab: TabState): void {
 class TabStore {
   tabs = $state<TabState[]>([]);
   activeTabId = $state<string | null>(null);
+  /** Grid への差分更新通知。version でトリガーし、op で更新内容を伝える。 */
+  lastGridOp = $state<{ version: number; op: EditOp } | null>(null);
+  private gridOpVersion = 0;
 
   get activeTab(): TabState | undefined {
     return this.tabs.find((t) => t.id === this.activeTabId);
@@ -101,7 +105,7 @@ class TabStore {
     this.tabs.push({
       id,
       file,
-      rows: structuredClone(file.rows),
+      rows: [...file.rows],
       searchQuery: "",
       mode: "view",
       dirty: false,
@@ -181,6 +185,26 @@ class TabStore {
     }
   }
 
+  /** 行を追加する。 */
+  addRow(rowIndex: number, position: "above" | "below"): void {
+    const tab = this.activeTab;
+    if (!tab) return;
+    const insertIndex = position === "above" ? rowIndex : rowIndex + 1;
+    const emptyRow = new Array(tab.file.headers.length).fill("");
+    this.applyEdit({ type: "addRow", rowIndex: insertIndex, row: emptyRow });
+  }
+
+  /** 行を削除する。 */
+  deleteRow(rowIndex: number): void {
+    const tab = this.activeTab;
+    if (!tab || rowIndex < 0 || rowIndex >= tab.rows.length) return;
+    this.applyEdit({
+      type: "deleteRow",
+      rowIndex,
+      row: [...tab.rows[rowIndex]],
+    });
+  }
+
   /** 編集操作を適用し、Undo スタックに積む。 */
   applyEdit(op: EditOp): void {
     const tab = this.activeTab;
@@ -191,6 +215,7 @@ class TabStore {
     tab.redoStack = [];
     tab.dirty = true;
     rebuildDirtyCells(tab);
+    this.lastGridOp = { version: ++this.gridOpVersion, op };
   }
 
   /** 直前の操作を取り消す。 */
@@ -204,6 +229,7 @@ class TabStore {
     tab.redoStack.push(op);
     tab.dirty = tab.undoStack.length > 0;
     rebuildDirtyCells(tab);
+    this.lastGridOp = { version: ++this.gridOpVersion, op: inverse };
     return inverse;
   }
 
@@ -217,6 +243,7 @@ class TabStore {
     tab.undoStack.push(op);
     tab.dirty = true;
     rebuildDirtyCells(tab);
+    this.lastGridOp = { version: ++this.gridOpVersion, op };
     return op;
   }
 
@@ -230,8 +257,9 @@ class TabStore {
     const rows = $state.snapshot(tab.rows);
 
     await saveFile(tab.file.path, headers, rows, tab.file.encoding);
-    tab.file.rows = structuredClone(rows);
-    tab.file.row_count = tab.rows.length;
+    tab.file.rows = rows;
+    tab.rows = [...rows];
+    tab.file.row_count = rows.length;
     tab.dirty = false;
     tab.undoStack = [];
     tab.redoStack = [];
