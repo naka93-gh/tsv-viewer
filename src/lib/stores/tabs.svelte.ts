@@ -256,7 +256,10 @@ class TabStore {
         toastStore.error(`編集モードへの切り替えに失敗しました: ${e}`);
       }
     } else {
-      // edit → view: dirty 時は確認
+      // edit → view: 新規タブ（未保存）は閲覧モードに切替不可
+      if (!tab.fileMeta.path) return;
+
+      // dirty 時は確認
       if (tab.dirty) {
         const confirmed = await ask(
           "未保存の変更があります。閲覧モードに戻ると変更は破棄されます。",
@@ -349,6 +352,17 @@ class TabStore {
 
     const newPath = await saveFileDialog(tab.fileMeta.path || undefined);
     if (!newPath) return;
+
+    // 別のタブが同じパスで開いている場合は保存を拒否
+    const conflict = this.tabs.find(
+      (t) => t.id !== tab.id && t.fileMeta.path === newPath,
+    );
+    if (conflict) {
+      toastStore.error(
+        "このファイルは別のタブで開かれています。先にそのタブを閉じてください。",
+      );
+      return;
+    }
 
     try {
       const oldPath = tab.fileMeta.path;
