@@ -20,7 +20,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(state::FileStore::new())
         .invoke_handler(tauri::generate_handler![
-            commands::open_file,
             commands::open_file_view,
             commands::get_rows,
             commands::get_all_rows,

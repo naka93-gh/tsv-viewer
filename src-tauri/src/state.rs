@@ -25,16 +25,6 @@ pub struct CachedFile {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct FileMetadata {
-    pub headers: Vec<String>,
-    pub encoding: String,
-    pub path: String,
-    pub row_count: usize,
-    pub column_count: usize,
-    pub line_ending: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct RowsResult {
     pub rows: Vec<Vec<String>>,
     pub last_row: usize,
@@ -74,7 +64,7 @@ pub fn rebuild_view_indices(
         return;
     }
 
-    let headers = &cached.parsed.headers;
+    let headers = &cached.parsed.meta.headers;
     let rows = &cached.parsed.rows;
 
     // フィルタ適用

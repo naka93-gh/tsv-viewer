@@ -1,20 +1,9 @@
 use crate::encoding;
-use crate::parser::{self, ParsedFile};
-use crate::state::{
-    rebuild_view_indices, CachedFile, FileMetadata, FileStore, FilterItem, RowsResult, SortItem,
-};
+use crate::parser::{self, FileMetadata, ParsedFile};
+use crate::state::{rebuild_view_indices, CachedFile, FileStore, FilterItem, RowsResult, SortItem};
 use std::collections::HashMap;
 use std::fs;
 use tauri::State;
-
-/// ファイルを読み込み、文字コード判定・TSV パースを行って返す。
-#[tauri::command]
-pub fn open_file(path: String) -> Result<ParsedFile, String> {
-    let bytes = fs::read(&path).map_err(|e| format!("ファイルの読み込みに失敗: {e}"))?;
-    let (text, enc) = encoding::detect_and_decode(&bytes);
-    let line_ending = encoding::detect_line_ending(&text);
-    parser::parse_tsv(&text, &path, &enc, line_ending)
-}
 
 /// 閲覧モード用: ファイルを読み込み State にキャッシュし、metadata のみ返す
 #[tauri::command]
@@ -24,16 +13,8 @@ pub fn open_file_view(path: String, store: State<FileStore>) -> Result<FileMetad
     let line_ending = encoding::detect_line_ending(&text);
     let parsed = parser::parse_tsv(&text, &path, &enc, line_ending)?;
 
-    let metadata = FileMetadata {
-        headers: parsed.headers.clone(),
-        encoding: parsed.encoding.clone(),
-        path: parsed.path.clone(),
-        row_count: parsed.row_count,
-        column_count: parsed.column_count,
-        line_ending: parsed.line_ending.clone(),
-    };
-
-    let row_count = parsed.row_count;
+    let metadata = parsed.meta.clone();
+    let row_count = parsed.meta.row_count;
     let cached = CachedFile {
         parsed,
         view_indices: (0..row_count).collect(),
@@ -88,15 +69,7 @@ pub fn get_all_rows(path: String, store: State<FileStore>) -> Result<ParsedFile,
         .get(&path)
         .ok_or_else(|| format!("ファイルがキャッシュにありません: {path}"))?;
 
-    Ok(ParsedFile {
-        headers: cached.parsed.headers.clone(),
-        rows: cached.parsed.rows.clone(),
-        encoding: cached.parsed.encoding.clone(),
-        path: cached.parsed.path.clone(),
-        row_count: cached.parsed.row_count,
-        column_count: cached.parsed.column_count,
-        line_ending: cached.parsed.line_ending.clone(),
-    })
+    Ok(cached.parsed.clone())
 }
 
 /// キャッシュ削除
@@ -138,13 +111,15 @@ pub fn save_file(
             path.clone(),
             CachedFile {
                 parsed: ParsedFile {
-                    headers,
+                    meta: FileMetadata {
+                        headers,
+                        encoding,
+                        path,
+                        row_count,
+                        column_count,
+                        line_ending,
+                    },
                     rows,
-                    encoding,
-                    path,
-                    row_count,
-                    column_count,
-                    line_ending,
                 },
                 view_indices: (0..row_count).collect(),
                 last_sort_key: String::new(),
