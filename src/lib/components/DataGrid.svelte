@@ -44,9 +44,6 @@
   let gridContainer: HTMLDivElement;
   let gridApi: GridApi | undefined;
 
-  /** cellStyle クロージャから参照するための可変参照 */
-  let dirtyCellsRef: Set<string> = new Set();
-
   /** コンテキストメニューの状態 */
   let contextMenu = $state<{ x: number; y: number; rowIndex: number } | null>(
     null,
@@ -145,7 +142,7 @@
           floatingFilter: true,
           cellStyle: (params) => {
             const key = `${params.data?._rowIndex}:${params.colDef?.field}`;
-            if (dirtyCellsRef.has(key)) {
+            if (dirtyCells.has(key)) {
               return { backgroundColor: "rgba(224, 160, 80, 0.12)" };
             }
             return null;
@@ -157,7 +154,6 @@
         onCellValueChanged: handleCellValueChanged,
       };
 
-      dirtyCellsRef = dirtyCells;
       gridApi = createGrid(gridContainer, gridOptions, {
         modules: [AllCommunityModule],
       });
@@ -167,6 +163,12 @@
       gridApi?.destroy();
       gridApi = undefined;
     };
+  });
+
+  /** dirtyCells の変更を AG Grid に反映 */
+  $effect(() => {
+    void dirtyCells;
+    gridApi?.redrawRows();
   });
 
   /** searchQuery の変更を AG Grid に反映 */
@@ -227,7 +229,6 @@
           break;
         }
       }
-      dirtyCellsRef = dirtyCells;
       gridApi.refreshCells({ force: true });
     });
   });
