@@ -65,10 +65,23 @@
     }));
   }
 
-  /** rows を AG Grid の rowData に変換。_rowIndex でオリジナル行を特定可能。 */
-  function buildRowData(data: string[][]): Record<string, string | number>[] {
+  /** rows を AG Grid の rowData に変換（編集モード用）。_rowIndex でオリジナル行を特定。 */
+  function buildEditRowData(
+    data: string[][],
+  ): Record<string, string | number>[] {
     return data.map((row, rowIndex) => {
       const obj: Record<string, string | number> = { _rowIndex: rowIndex };
+      row.forEach((value, colIndex) => {
+        obj[String(colIndex)] = value;
+      });
+      return obj;
+    });
+  }
+
+  /** rows を AG Grid の rowData に変換（閲覧モード用）。 */
+  function buildViewRowData(data: string[][]): Record<string, string>[] {
+    return data.map((row) => {
+      const obj: Record<string, string> = {};
       row.forEach((value, colIndex) => {
         obj[String(colIndex)] = value;
       });
@@ -164,7 +177,10 @@
           searchQuery,
         )
           .then((result) => {
-            params.successCallback(buildRowData(result.rows), result.last_row);
+            params.successCallback(
+              buildViewRowData(result.rows),
+              result.last_row,
+            );
           })
           .catch(() => {
             params.failCallback();
@@ -185,7 +201,7 @@
         const gridOptions: GridOptions = {
           theme: customTheme,
           columnDefs: buildColDefs(fileMeta.headers, true),
-          rowData: buildRowData(rows),
+          rowData: buildEditRowData(rows),
           defaultColDef: {
             flex: 1,
             minWidth: 100,
