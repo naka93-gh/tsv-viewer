@@ -2,12 +2,8 @@
 <script lang="ts">
   import { tabStore } from "$lib/stores/tabs.svelte";
 
-  async function handleOpen() {
-    try {
-      await tabStore.openDialog();
-    } catch (e) {
-      console.error("ファイルを開けませんでした:", e);
-    }
+  function handleOpen() {
+    tabStore.openDialog();
   }
 </script>
 

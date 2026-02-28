@@ -6,12 +6,8 @@
     return path.split("/").pop() ?? path;
   }
 
-  async function handleAdd() {
-    try {
-      await tabStore.openDialog();
-    } catch (e) {
-      console.error("ファイルを開けませんでした:", e);
-    }
+  function handleAdd() {
+    tabStore.openDialog();
   }
 </script>
 

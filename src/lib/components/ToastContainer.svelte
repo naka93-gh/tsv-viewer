@@ -1,33 +1,34 @@
 <!--
   トースト通知コンテナ。画面右下に固定配置。
   タイプ別の左ボーダーカラーで区別し、duration=0 のトーストには閉じるボタンを表示する。
+  MEMO: {#if} で囲むと {#each} のトランジションと競合するため、コンテナは常にDOMに存在させる。
 -->
 <script lang="ts">
   import { toastStore } from "$lib/stores/toast.svelte";
-  import { fly } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
+  import { fade, fly } from "svelte/transition";
 </script>
 
-{#if toastStore.toasts.length > 0}
-  <div class="toast-container" role="status" aria-live="polite">
-    {#each toastStore.toasts as toast (toast.id)}
-      <div
-        class="toast toast-{toast.type}"
-        transition:fly={{ x: 300, duration: 250 }}
-      >
-        <span class="toast-message">{toast.message}</span>
-        {#if toast.duration === 0}
-          <button
-            class="toast-close"
-            onclick={() => toastStore.remove(toast.id)}
-            aria-label="閉じる"
-          >
-            ✕
-          </button>
-        {/if}
-      </div>
-    {/each}
-  </div>
-{/if}
+<div class="toast-container" role="status" aria-live="polite">
+  {#each toastStore.toasts as toast (toast.id)}
+    <div
+      class="toast toast-{toast.type}"
+      in:fly={{ x: 300, duration: 300, easing: cubicOut }}
+      out:fade={{ duration: 200 }}
+    >
+      <span class="toast-message">{toast.message}</span>
+      {#if toast.duration === 0}
+        <button
+          class="toast-close"
+          onclick={() => toastStore.remove(toast.id)}
+          aria-label="閉じる"
+        >
+          ✕
+        </button>
+      {/if}
+    </div>
+  {/each}
+</div>
 
 <style>
   .toast-container {

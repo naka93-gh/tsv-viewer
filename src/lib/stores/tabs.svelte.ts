@@ -1,5 +1,6 @@
 /** マルチタブ状態管理。編集モード・Undo/Redo・保存をサポートする。 */
 import { openFile, openFileDialog, saveFile } from "$lib/commands";
+import { toastStore } from "$lib/stores/toast.svelte";
 import type { EditOp, TabState } from "$lib/types";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { SvelteSet } from "svelte/reactivity";
@@ -93,27 +94,35 @@ class TabStore {
   }
 
   /** ファイルを新タブで開く。同一パスが既に開かれていればそのタブをアクティブにする。 */
-  async open(path: string): Promise<void> {
+  async open(path: string, options?: { silent?: boolean }): Promise<void> {
     const existing = this.tabs.find((t) => t.file.path === path);
     if (existing) {
       this.activeTabId = existing.id;
       return;
     }
 
-    const file = await openFile(path);
-    const id = generateId();
-    this.tabs.push({
-      id,
-      file,
-      rows: [...file.rows],
-      searchQuery: "",
-      mode: "view",
-      dirty: false,
-      undoStack: [],
-      redoStack: [],
-      dirtyCells: new SvelteSet(),
-    });
-    this.activeTabId = id;
+    try {
+      const file = await openFile(path);
+      const id = generateId();
+      this.tabs.push({
+        id,
+        file,
+        rows: [...file.rows],
+        searchQuery: "",
+        mode: "view",
+        dirty: false,
+        undoStack: [],
+        redoStack: [],
+        dirtyCells: new SvelteSet(),
+      });
+      this.activeTabId = id;
+      if (!options?.silent) {
+        const name = path.split("/").pop() ?? path;
+        toastStore.success(`${name} を読み込みました`);
+      }
+    } catch (e) {
+      toastStore.error(`ファイルを開けませんでした: ${e}`);
+    }
   }
 
   /** ファイル選択ダイアログを表示し、選択されたファイルを新タブで開く。 */
@@ -252,18 +261,23 @@ class TabStore {
     const tab = this.activeTab;
     if (!tab || !tab.dirty) return;
 
-    // Svelte プロキシを剥がしてプレーンデータにしてから Tauri に渡す
-    const headers = $state.snapshot(tab.file.headers);
-    const rows = $state.snapshot(tab.rows);
+    try {
+      // Svelte プロキシを剥がしてプレーンデータにしてから Tauri に渡す
+      const headers = $state.snapshot(tab.file.headers);
+      const rows = $state.snapshot(tab.rows);
 
-    await saveFile(tab.file.path, headers, rows, tab.file.encoding);
-    tab.file.rows = rows;
-    tab.rows = [...rows];
-    tab.file.row_count = rows.length;
-    tab.dirty = false;
-    tab.undoStack = [];
-    tab.redoStack = [];
-    tab.dirtyCells = new SvelteSet();
+      await saveFile(tab.file.path, headers, rows, tab.file.encoding);
+      tab.file.rows = rows;
+      tab.rows = [...rows];
+      tab.file.row_count = rows.length;
+      tab.dirty = false;
+      tab.undoStack = [];
+      tab.redoStack = [];
+      tab.dirtyCells = new SvelteSet();
+      toastStore.success("保存しました");
+    } catch (e) {
+      toastStore.error(`保存に失敗しました: ${e}`);
+    }
   }
 }
 

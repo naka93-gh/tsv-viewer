@@ -11,6 +11,7 @@
   import StatusBar from "$lib/components/StatusBar.svelte";
   import Toolbar from "$lib/components/Toolbar.svelte";
   import { tabStore } from "$lib/stores/tabs.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
   import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
   let searchQuery = $derived(tabStore.activeTab?.searchQuery ?? "");
@@ -30,7 +31,7 @@
       tabStore.toggleMode();
     } else if (e.key === "s") {
       e.preventDefault();
-      tabStore.save().catch((err) => console.error("保存に失敗:", err));
+      tabStore.save();
     } else if (e.key === "z" && e.shiftKey) {
       e.preventDefault();
       tabStore.redo();
@@ -52,15 +53,20 @@
     let cancelled = false;
 
     const setupListener = async () => {
-      const unlisten = await appWindow.onDragDropEvent((event) => {
+      const unlisten = await appWindow.onDragDropEvent(async (event) => {
         if (cancelled) return;
         if (event.payload.type === "drop" && event.payload.paths.length > 0) {
-          for (const path of event.payload.paths) {
-            if (path.endsWith(".tsv") || path.endsWith(".txt")) {
-              tabStore.open(path).catch((e) => {
-                console.error("ファイルを開けませんでした:", e);
-              });
-            }
+          const paths = event.payload.paths.filter(
+            (p) => p.endsWith(".tsv") || p.endsWith(".txt"),
+          );
+          await Promise.all(
+            paths.map((p) => tabStore.open(p, { silent: true })),
+          );
+          if (paths.length === 1) {
+            const name = paths[0].split("/").pop() ?? paths[0];
+            toastStore.success(`${name} を読み込みました`);
+          } else if (paths.length > 1) {
+            toastStore.success(`${paths.length} 件のファイルを読み込みました`);
           }
         }
       });
