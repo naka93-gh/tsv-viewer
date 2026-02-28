@@ -109,6 +109,7 @@ pub fn close_file(path: String, store: State<FileStore>) -> Result<(), String> {
 
 /// ヘッダーと行データを TSV 形式で指定パスに保存する。
 /// 元の文字コードを維持して書き出す。
+/// 保存後、FileStore のキャッシュも更新する（閲覧モードとの整合性維持）。
 #[tauri::command]
 pub fn save_file(
     path: String,
@@ -116,6 +117,7 @@ pub fn save_file(
     rows: Vec<Vec<String>>,
     encoding: String,
     line_ending: String,
+    store: State<FileStore>,
 ) -> Result<(), String> {
     let mut lines: Vec<String> = Vec::with_capacity(rows.len() + 1);
     lines.push(headers.join("\t"));
@@ -126,5 +128,30 @@ pub fn save_file(
     let text = lines.join(separator);
 
     let bytes = encoding::encode(&text, &encoding)?;
-    fs::write(&path, bytes).map_err(|e| format!("ファイルの保存に失敗: {e}"))
+    fs::write(&path, bytes).map_err(|e| format!("ファイルの保存に失敗: {e}"))?;
+
+    // キャッシュを更新（閲覧モードに戻った時に最新データを返すため）
+    if let Ok(mut files) = store.files.lock() {
+        let row_count = rows.len();
+        let column_count = headers.len();
+        files.insert(
+            path.clone(),
+            CachedFile {
+                parsed: ParsedFile {
+                    headers,
+                    rows,
+                    encoding,
+                    path,
+                    row_count,
+                    column_count,
+                    line_ending,
+                },
+                view_indices: (0..row_count).collect(),
+                last_sort_key: String::new(),
+                last_filter_key: String::new(),
+            },
+        );
+    }
+
+    Ok(())
 }

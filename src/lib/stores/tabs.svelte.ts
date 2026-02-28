@@ -239,14 +239,6 @@ class TabStore {
     }
   }
 
-  /** 閲覧/編集モードを設定する。 */
-  setMode(mode: "view" | "edit"): void {
-    const tab = this.activeTab;
-    if (tab) {
-      tab.mode = mode;
-    }
-  }
-
   /** 閲覧/編集モードをトグルする。 */
   async toggleMode(): Promise<void> {
     const tab = this.activeTab;
@@ -359,6 +351,7 @@ class TabStore {
     if (!newPath) return;
 
     try {
+      const oldPath = tab.fileMeta.path;
       const headers = $state.snapshot(tab.file.headers);
       const rows = $state.snapshot(tab.rows);
 
@@ -369,6 +362,13 @@ class TabStore {
         tab.fileMeta.encoding,
         tab.fileMeta.line_ending,
       );
+
+      // パスが変わった場合、旧キャッシュを解放
+      // （save_file が新パスでキャッシュを作成済み）
+      if (oldPath && oldPath !== newPath) {
+        closeFile(oldPath).catch(() => {});
+      }
+
       tab.fileMeta.path = newPath;
       tab.file.path = newPath;
       tab.file.rows = rows;
