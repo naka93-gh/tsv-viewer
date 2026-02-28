@@ -1,7 +1,9 @@
 /** マルチタブ状態管理。編集モード・Undo/Redo・保存をサポートする。 */
 import {
-  openFile,
+  closeFile,
+  getAllRows,
   openFileDialog,
+  openFileView,
   saveFile,
   saveFileDialog,
 } from "$lib/commands";
@@ -48,6 +50,8 @@ function applyOpToRows(rows: string[][], op: EditOp): void {
  * 行追加・削除によるインデックスのシフトも追跡する。
  */
 function rebuildDirtyCells(tab: TabState): void {
+  if (!tab.file || !tab.rows) return;
+
   // 原本行の 1:1 マッピング（originalIndices[i] = 原本での行番号, null = 追加行）
   const origIndices: (number | null)[] = tab.file.rows.map((_, i) => i);
 
@@ -65,12 +69,10 @@ function rebuildDirtyCells(tab: TabState): void {
   for (let i = 0; i < tab.rows.length; i++) {
     const origIdx = origIndices[i];
     if (origIdx === null) {
-      // 追加された行 — 全セルを dirty とする
       for (let j = 0; j < colCount; j++) {
         dirty.add(`${i}:${j}`);
       }
     } else {
-      // 原本行と比較して差分のあるセルを dirty とする
       const origRow = tab.file.rows[origIdx];
       for (let j = 0; j < colCount; j++) {
         if (tab.rows[i][j] !== origRow[j]) {
@@ -98,21 +100,22 @@ class TabStore {
     return this.tabs.length > 0;
   }
 
-  /** ファイルを新タブで開く。同一パスが既に開かれていればそのタブをアクティブにする。 */
+  /** ファイルを新タブで開く（閲覧モード）。同一パスが既に開かれていればそのタブをアクティブにする。 */
   async open(path: string, options?: { silent?: boolean }): Promise<void> {
-    const existing = this.tabs.find((t) => t.file.path === path);
+    const existing = this.tabs.find((t) => t.fileMeta.path === path);
     if (existing) {
       this.activeTabId = existing.id;
       return;
     }
 
     try {
-      const file = await openFile(path);
+      const fileMeta = await openFileView(path);
       const id = generateId();
       this.tabs.push({
         id,
-        file,
-        rows: [...file.rows],
+        fileMeta,
+        file: null,
+        rows: null,
         searchQuery: "",
         mode: "view",
         dirty: false,
@@ -135,6 +138,14 @@ class TabStore {
     const id = generateId();
     this.tabs.push({
       id,
+      fileMeta: {
+        headers: ["Column1"],
+        encoding: "UTF-8",
+        path: "",
+        row_count: 0,
+        column_count: 1,
+        line_ending: "LF",
+      },
       file: {
         headers: ["Column1"],
         rows: [],
@@ -201,6 +212,11 @@ class TabStore {
       if (!confirmed) return;
     }
 
+    // Rust キャッシュ解放
+    if (tab.fileMeta.path) {
+      closeFile(tab.fileMeta.path).catch(() => {});
+    }
+
     const index = this.tabs.findIndex((t) => t.id === tabId);
     const wasActive = this.activeTabId === tabId;
     this.tabs.splice(index, 1);
@@ -232,17 +248,49 @@ class TabStore {
   }
 
   /** 閲覧/編集モードをトグルする。 */
-  toggleMode(): void {
+  async toggleMode(): Promise<void> {
     const tab = this.activeTab;
-    if (tab) {
-      tab.mode = tab.mode === "view" ? "edit" : "view";
+    if (!tab) return;
+
+    if (tab.mode === "view") {
+      // view → edit: 全行取得
+      if (!tab.fileMeta.path) return;
+      try {
+        const parsed = await getAllRows(tab.fileMeta.path);
+        tab.file = parsed;
+        tab.rows = [...parsed.rows];
+        tab.mode = "edit";
+      } catch (e) {
+        toastStore.error(`編集モードへの切り替えに失敗しました: ${e}`);
+      }
+    } else {
+      // edit → view: dirty 時は確認
+      if (tab.dirty) {
+        const confirmed = await ask(
+          "未保存の変更があります。閲覧モードに戻ると変更は破棄されます。",
+          {
+            title: "確認",
+            kind: "warning",
+            okLabel: "破棄して閲覧モードへ",
+            cancelLabel: "キャンセル",
+          },
+        );
+        if (!confirmed) return;
+      }
+      tab.file = null;
+      tab.rows = null;
+      tab.mode = "view";
+      tab.dirty = false;
+      tab.undoStack = [];
+      tab.redoStack = [];
+      tab.dirtyCells = new SvelteSet();
     }
   }
 
   /** 行を追加する。 */
   addRow(rowIndex: number, position: "above" | "below"): void {
     const tab = this.activeTab;
-    if (!tab) return;
+    if (!tab || !tab.file) return;
     const insertIndex = position === "above" ? rowIndex : rowIndex + 1;
     const emptyRow = new Array(tab.file.headers.length).fill("");
     this.applyEdit({ type: "addRow", rowIndex: insertIndex, row: emptyRow });
@@ -251,7 +299,8 @@ class TabStore {
   /** 行を削除する。 */
   deleteRow(rowIndex: number): void {
     const tab = this.activeTab;
-    if (!tab || rowIndex < 0 || rowIndex >= tab.rows.length) return;
+    if (!tab || !tab.rows || rowIndex < 0 || rowIndex >= tab.rows.length)
+      return;
     this.applyEdit({
       type: "deleteRow",
       rowIndex,
@@ -262,7 +311,7 @@ class TabStore {
   /** 編集操作を適用し、Undo スタックに積む。 */
   applyEdit(op: EditOp): void {
     const tab = this.activeTab;
-    if (!tab) return;
+    if (!tab || !tab.rows) return;
 
     applyOpToRows(tab.rows, op);
     tab.undoStack.push(op);
@@ -275,7 +324,7 @@ class TabStore {
   /** 直前の操作を取り消す。 */
   undo(): EditOp | undefined {
     const tab = this.activeTab;
-    if (!tab || tab.undoStack.length === 0) return undefined;
+    if (!tab || !tab.rows || tab.undoStack.length === 0) return undefined;
 
     const op = tab.undoStack.pop()!;
     const inverse = invertOp(op);
@@ -290,7 +339,7 @@ class TabStore {
   /** 取り消した操作をやり直す。 */
   redo(): EditOp | undefined {
     const tab = this.activeTab;
-    if (!tab || tab.redoStack.length === 0) return undefined;
+    if (!tab || !tab.rows || tab.redoStack.length === 0) return undefined;
 
     const op = tab.redoStack.pop()!;
     applyOpToRows(tab.rows, op);
@@ -304,9 +353,9 @@ class TabStore {
   /** 名前を付けて保存。ダイアログで選択されたパスに保存する。 */
   async saveAs(): Promise<void> {
     const tab = this.activeTab;
-    if (!tab) return;
+    if (!tab || !tab.file || !tab.rows) return;
 
-    const newPath = await saveFileDialog(tab.file.path || undefined);
+    const newPath = await saveFileDialog(tab.fileMeta.path || undefined);
     if (!newPath) return;
 
     try {
@@ -317,12 +366,14 @@ class TabStore {
         newPath,
         headers,
         rows,
-        tab.file.encoding,
-        tab.file.line_ending,
+        tab.fileMeta.encoding,
+        tab.fileMeta.line_ending,
       );
+      tab.fileMeta.path = newPath;
       tab.file.path = newPath;
       tab.file.rows = rows;
       tab.rows = [...rows];
+      tab.fileMeta.row_count = rows.length;
       tab.file.row_count = rows.length;
       tab.dirty = false;
       tab.undoStack = [];
@@ -338,26 +389,26 @@ class TabStore {
   /** アクティブタブを上書き保存する。パスが未設定の場合は名前を付けて保存にフォールバック。 */
   async save(): Promise<void> {
     const tab = this.activeTab;
-    if (!tab || !tab.dirty) return;
+    if (!tab || !tab.dirty || !tab.file || !tab.rows) return;
 
-    if (!tab.file.path) {
+    if (!tab.fileMeta.path) {
       return this.saveAs();
     }
 
     try {
-      // Svelte プロキシを剥がしてプレーンデータにしてから Tauri に渡す
       const headers = $state.snapshot(tab.file.headers);
       const rows = $state.snapshot(tab.rows);
 
       await saveFile(
-        tab.file.path,
+        tab.fileMeta.path,
         headers,
         rows,
-        tab.file.encoding,
-        tab.file.line_ending,
+        tab.fileMeta.encoding,
+        tab.fileMeta.line_ending,
       );
       tab.file.rows = rows;
       tab.rows = [...rows];
+      tab.fileMeta.row_count = rows.length;
       tab.file.row_count = rows.length;
       tab.dirty = false;
       tab.undoStack = [];

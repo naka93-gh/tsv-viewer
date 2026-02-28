@@ -1,21 +1,21 @@
 <!-- ステータスバー。ファイル名・文字コード・行数×列数・モードを表示する。 -->
 <script lang="ts">
-  import type { ParsedFile } from "$lib/types";
+  import type { FileMetadata } from "$lib/types";
 
   interface Props {
-    file: ParsedFile;
+    fileMeta: FileMetadata;
     rowCount: number;
     mode: "view" | "edit";
   }
-  let { file, rowCount, mode }: Props = $props();
+  let { fileMeta, rowCount, mode }: Props = $props();
 
   function basename(path: string): string {
     return path.split(/[/\\]/).pop() ?? path;
   }
 
-  let fileName = $derived(basename(file.path));
+  let fileName = $derived(basename(fileMeta.path));
   let dimensions = $derived(
-    `${rowCount.toLocaleString()}行 \u00d7 ${file.column_count}列`,
+    `${rowCount.toLocaleString()}行 \u00d7 ${fileMeta.column_count}列`,
   );
   let modeLabel = $derived(mode === "edit" ? "編集モード" : "閲覧モード");
 </script>
@@ -23,9 +23,9 @@
 <div class="status-bar">
   <span class="item">{fileName}</span>
   <span class="sep">&vert;</span>
-  <span class="item">{file.encoding}</span>
+  <span class="item">{fileMeta.encoding}</span>
   <span class="sep">&vert;</span>
-  <span class="item">{file.line_ending}</span>
+  <span class="item">{fileMeta.line_ending}</span>
   <span class="sep">&vert;</span>
   <span class="item">{dimensions}</span>
   <div class="spacer"></div>

@@ -17,9 +17,14 @@
 
   let searchQuery = $derived(tabStore.activeTab?.searchQuery ?? "");
   let mode = $derived(tabStore.activeTab?.mode ?? "view");
-  let rows = $derived(tabStore.activeTab?.rows ?? []);
+  let rows = $derived(tabStore.activeTab?.rows ?? null);
   let dirtyCells = $derived(
     tabStore.activeTab?.dirtyCells ?? new Set<string>(),
+  );
+  let rowCount = $derived(
+    tabStore.activeTab?.rows?.length ??
+      tabStore.activeTab?.fileMeta.row_count ??
+      0,
   );
 
   /** キーボードショートカット */
@@ -102,7 +107,7 @@
   />
   {#key tabStore.activeTabId}
     <DataGrid
-      file={tabStore.activeTab.file}
+      fileMeta={tabStore.activeTab.fileMeta}
       {rows}
       {searchQuery}
       {mode}
@@ -113,7 +118,7 @@
       onDeleteRow={(rowIndex) => tabStore.deleteRow(rowIndex)}
     />
   {/key}
-  <StatusBar file={tabStore.activeTab.file} rowCount={rows.length} {mode} />
+  <StatusBar fileMeta={tabStore.activeTab.fileMeta} {rowCount} {mode} />
 {:else}
   <EmptyState />
 {/if}

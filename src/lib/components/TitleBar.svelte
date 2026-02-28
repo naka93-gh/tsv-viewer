@@ -28,7 +28,7 @@
         aria-selected={tab.id === tabStore.activeTabId}
       >
         <span class="tab-label">
-          {fileName(tab.file.path)}
+          {fileName(tab.fileMeta.path)}
           {#if tab.dirty}
             <span class="dirty-marker">●</span>
           {/if}

@@ -31,6 +31,35 @@ export type EditOp =
   | { type: "addRow"; rowIndex: number; row: string[] }
   | { type: "deleteRow"; rowIndex: number; row: string[] };
 
+/** 閲覧モード用メタデータ。Rust 側で全行を保持し、ヘッダー等の情報のみ返す。 */
+export interface FileMetadata {
+  headers: string[];
+  encoding: string;
+  path: string;
+  row_count: number;
+  column_count: number;
+  line_ending: string;
+}
+
+/** get_rows の戻り値 */
+export interface RowsResult {
+  rows: string[][];
+  last_row: number;
+}
+
+/** AG Grid ソートモデルの1項目 */
+export interface SortItem {
+  colId: string;
+  sort: "asc" | "desc";
+}
+
+/** AG Grid フィルタモデルの1項目 */
+export interface FilterItem {
+  filterType: string;
+  type: string;
+  filter: string;
+}
+
 /** トーストの種別 */
 export type ToastType = "success" | "error" | "warning" | "info";
 
@@ -46,8 +75,12 @@ export interface Toast {
 /** タブ1つ分の状態。ファイル・編集状態・Undo 履歴を保持する。 */
 export interface TabState {
   id: string;
-  file: ParsedFile;
-  rows: string[][];
+  /** 常に存在するメタ情報 */
+  fileMeta: FileMetadata;
+  /** 編集モード時のみ: 原本データ */
+  file: ParsedFile | null;
+  /** 編集モード時のみ: 作業用行データ */
+  rows: string[][] | null;
   searchQuery: string;
   mode: "view" | "edit";
   dirty: boolean;

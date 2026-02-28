@@ -1,11 +1,12 @@
 <!--
   AG Grid によるテーブル表示コンポーネント。
-  編集モード対応: セル編集・コンテキストメニュー・Undo/Redo のセル反映。
-  dirtyCells に含まれるセルは背景色で強調表示する。
+  閲覧モード: Infinite Row Model（Rust 側でソート・フィルタ・ページング）
+  編集モード: Client-Side Row Model（セル編集・コンテキストメニュー・Undo/Redo）
 -->
 <script lang="ts">
+  import { getRows } from "$lib/commands";
   import ContextMenu from "$lib/components/ContextMenu.svelte";
-  import type { EditOp, ParsedFile } from "$lib/types";
+  import type { EditOp, FileMetadata, FilterItem, SortItem } from "$lib/types";
   import {
     AllCommunityModule,
     colorSchemeDark,
@@ -15,12 +16,15 @@
     type ColDef,
     type GridApi,
     type GridOptions,
+    type IDatasource,
+    type IGetRowsParams,
   } from "ag-grid-community";
   import { untrack } from "svelte";
 
   interface Props {
-    file: ParsedFile;
-    rows: string[][];
+    fileMeta: FileMetadata;
+    /** 編集モード時のみ非 null */
+    rows: string[][] | null;
     searchQuery?: string;
     mode: "view" | "edit";
     dirtyCells: Set<string>;
@@ -30,7 +34,7 @@
     onDeleteRow: (rowIndex: number) => void;
   }
   let {
-    file,
+    fileMeta,
     rows,
     searchQuery = "",
     mode,
@@ -125,6 +129,50 @@
     };
   }
 
+  /** Infinite Row Model 用 datasource を生成 */
+  function createDatasource(filePath: string): IDatasource {
+    return {
+      getRows(params: IGetRowsParams) {
+        const sortModel: SortItem[] = params.sortModel.map((s) => ({
+          colId: s.colId,
+          sort: s.sort as "asc" | "desc",
+        }));
+
+        const filterModel: Record<string, FilterItem> = {};
+        for (const [key, val] of Object.entries(
+          params.filterModel as Record<string, Record<string, unknown>>,
+        )) {
+          if (
+            val &&
+            typeof val.type === "string" &&
+            typeof val.filter === "string"
+          ) {
+            filterModel[key] = {
+              filterType: (val.filterType as string) ?? "text",
+              type: val.type,
+              filter: val.filter,
+            };
+          }
+        }
+
+        getRows(
+          filePath,
+          params.startRow,
+          params.endRow,
+          sortModel,
+          filterModel,
+          searchQuery,
+        )
+          .then((result) => {
+            params.successCallback(buildRowData(result.rows), result.last_row);
+          })
+          .catch(() => {
+            params.failCallback();
+          });
+      },
+    };
+  }
+
   /** AG Grid を初期化。mode の変更で再作成する。タブ切り替えは親の {#key} で処理。 */
   $effect(() => {
     const isEditable = mode === "edit";
@@ -132,31 +180,55 @@
     untrack(() => {
       if (!gridContainer) return;
 
-      const gridOptions: GridOptions = {
-        theme: customTheme,
-        columnDefs: buildColDefs(file.headers, isEditable),
-        rowData: buildRowData(rows),
-        defaultColDef: {
-          flex: 1,
-          minWidth: 100,
-          floatingFilter: true,
-          cellStyle: (params) => {
-            const key = `${params.data?._rowIndex}:${params.colDef?.field}`;
-            if (dirtyCells.has(key)) {
-              return { backgroundColor: "rgba(224, 160, 80, 0.12)" };
-            }
-            return null;
+      if (isEditable && rows) {
+        // 編集モード: Client-Side Row Model
+        const gridOptions: GridOptions = {
+          theme: customTheme,
+          columnDefs: buildColDefs(fileMeta.headers, true),
+          rowData: buildRowData(rows),
+          defaultColDef: {
+            flex: 1,
+            minWidth: 100,
+            floatingFilter: true,
+            cellStyle: (params) => {
+              const key = `${params.data?._rowIndex}:${params.colDef?.field}`;
+              if (dirtyCells.has(key)) {
+                return { backgroundColor: "rgba(224, 160, 80, 0.12)" };
+              }
+              return null;
+            },
           },
-        },
-        animateRows: false,
-        suppressCellFocus: !isEditable,
-        quickFilterText: searchQuery,
-        onCellValueChanged: handleCellValueChanged,
-      };
+          animateRows: false,
+          suppressCellFocus: false,
+          quickFilterText: searchQuery,
+          onCellValueChanged: handleCellValueChanged,
+        };
 
-      gridApi = createGrid(gridContainer, gridOptions, {
-        modules: [AllCommunityModule],
-      });
+        gridApi = createGrid(gridContainer, gridOptions, {
+          modules: [AllCommunityModule],
+        });
+      } else {
+        // 閲覧モード: Infinite Row Model
+        const gridOptions: GridOptions = {
+          theme: customTheme,
+          columnDefs: buildColDefs(fileMeta.headers, false),
+          rowModelType: "infinite",
+          datasource: createDatasource(fileMeta.path),
+          cacheBlockSize: 200,
+          maxBlocksInCache: 20,
+          defaultColDef: {
+            flex: 1,
+            minWidth: 100,
+            floatingFilter: true,
+          },
+          animateRows: false,
+          suppressCellFocus: true,
+        };
+
+        gridApi = createGrid(gridContainer, gridOptions, {
+          modules: [AllCommunityModule],
+        });
+      }
     });
 
     return () => {
@@ -165,15 +237,24 @@
     };
   });
 
-  /** dirtyCells の変更を AG Grid に反映 */
+  /** dirtyCells の変更を AG Grid に反映（編集モードのみ） */
   $effect(() => {
     void dirtyCells;
-    gridApi?.redrawRows();
+    if (mode === "edit") {
+      gridApi?.redrawRows();
+    }
   });
 
   /** searchQuery の変更を AG Grid に反映 */
   $effect(() => {
-    gridApi?.setGridOption("quickFilterText", searchQuery);
+    void searchQuery;
+    if (!gridApi) return;
+    if (mode === "edit") {
+      gridApi.setGridOption("quickFilterText", searchQuery);
+    } else {
+      // 閲覧モード: datasource を再設定してキャッシュを破棄
+      gridApi.purgeInfiniteCache();
+    }
   });
 
   /** 操作に応じた差分更新。applyTransaction で行追加・削除、セルは直接更新。 */
@@ -188,11 +269,10 @@
     }
     prevOpVersion = pending.version;
     untrack(() => {
-      if (!gridApi) return;
+      if (!gridApi || mode !== "edit") return;
       const { op } = pending;
       switch (op.type) {
         case "addRow": {
-          // 挿入位置以降の _rowIndex を +1
           gridApi.forEachNode((node) => {
             const idx = node.data._rowIndex as number;
             if (idx >= op.rowIndex) node.data._rowIndex = idx + 1;
@@ -207,7 +287,6 @@
           break;
         }
         case "deleteRow": {
-          // 削除対象を探して除去し、後続の _rowIndex を -1
           let target: Record<string, string | number> | null = null;
           gridApi.forEachNode((node) => {
             if (node.data._rowIndex === op.rowIndex) target = node.data;
@@ -220,7 +299,6 @@
           break;
         }
         case "cell": {
-          // セル値を直接更新
           gridApi.forEachNode((node) => {
             if (node.data._rowIndex === op.rowIndex) {
               node.data[String(op.colIndex)] = op.newValue;

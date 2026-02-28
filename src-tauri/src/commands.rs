@@ -1,6 +1,11 @@
 use crate::encoding;
 use crate::parser::{self, ParsedFile};
+use crate::state::{
+    rebuild_view_indices, CachedFile, FileMetadata, FileStore, FilterItem, RowsResult, SortItem,
+};
+use std::collections::HashMap;
 use std::fs;
+use tauri::State;
 
 /// ファイルを読み込み、文字コード判定・TSV パースを行って返す。
 #[tauri::command]
@@ -9,6 +14,97 @@ pub fn open_file(path: String) -> Result<ParsedFile, String> {
     let (text, enc) = encoding::detect_and_decode(&bytes);
     let line_ending = encoding::detect_line_ending(&text);
     parser::parse_tsv(&text, &path, &enc, line_ending)
+}
+
+/// 閲覧モード用: ファイルを読み込み State にキャッシュし、metadata のみ返す
+#[tauri::command]
+pub fn open_file_view(path: String, store: State<FileStore>) -> Result<FileMetadata, String> {
+    let bytes = fs::read(&path).map_err(|e| format!("ファイルの読み込みに失敗: {e}"))?;
+    let (text, enc) = encoding::detect_and_decode(&bytes);
+    let line_ending = encoding::detect_line_ending(&text);
+    let parsed = parser::parse_tsv(&text, &path, &enc, line_ending)?;
+
+    let metadata = FileMetadata {
+        headers: parsed.headers.clone(),
+        encoding: parsed.encoding.clone(),
+        path: parsed.path.clone(),
+        row_count: parsed.row_count,
+        column_count: parsed.column_count,
+        line_ending: parsed.line_ending.clone(),
+    };
+
+    let row_count = parsed.row_count;
+    let cached = CachedFile {
+        parsed,
+        view_indices: (0..row_count).collect(),
+        last_sort_key: String::new(),
+        last_filter_key: String::new(),
+    };
+
+    let mut files = store.files.lock().map_err(|e| format!("Lock error: {e}"))?;
+    files.insert(path, cached);
+
+    Ok(metadata)
+}
+
+/// ページング範囲の行を返す。ソート・フィルタ適用済み。
+#[tauri::command]
+pub fn get_rows(
+    path: String,
+    start_row: usize,
+    end_row: usize,
+    sort_model: Vec<SortItem>,
+    filter_model: HashMap<String, FilterItem>,
+    quick_filter: String,
+    store: State<FileStore>,
+) -> Result<RowsResult, String> {
+    let mut files = store.files.lock().map_err(|e| format!("Lock error: {e}"))?;
+    let cached = files
+        .get_mut(&path)
+        .ok_or_else(|| format!("ファイルがキャッシュにありません: {path}"))?;
+
+    rebuild_view_indices(cached, &sort_model, &filter_model, &quick_filter);
+
+    let total = cached.view_indices.len();
+    let start = start_row.min(total);
+    let end = end_row.min(total);
+
+    let rows: Vec<Vec<String>> = cached.view_indices[start..end]
+        .iter()
+        .map(|&idx| cached.parsed.rows[idx].clone())
+        .collect();
+
+    Ok(RowsResult {
+        rows,
+        last_row: total,
+    })
+}
+
+/// 編集モード切替時に全行取得
+#[tauri::command]
+pub fn get_all_rows(path: String, store: State<FileStore>) -> Result<ParsedFile, String> {
+    let files = store.files.lock().map_err(|e| format!("Lock error: {e}"))?;
+    let cached = files
+        .get(&path)
+        .ok_or_else(|| format!("ファイルがキャッシュにありません: {path}"))?;
+
+    Ok(ParsedFile {
+        headers: cached.parsed.headers.clone(),
+        rows: cached.parsed.rows.clone(),
+        encoding: cached.parsed.encoding.clone(),
+        path: cached.parsed.path.clone(),
+        row_count: cached.parsed.row_count,
+        column_count: cached.parsed.column_count,
+        line_ending: cached.parsed.line_ending.clone(),
+    })
+}
+
+/// キャッシュ削除
+#[tauri::command]
+pub fn close_file(path: String, store: State<FileStore>) -> Result<(), String> {
+    let mut files = store.files.lock().map_err(|e| format!("Lock error: {e}"))?;
+    files.remove(&path);
+    Ok(())
 }
 
 /// ヘッダーと行データを TSV 形式で指定パスに保存する。

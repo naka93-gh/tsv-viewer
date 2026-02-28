@@ -1,10 +1,11 @@
 mod commands;
 mod encoding;
 mod parser;
+mod state;
 
-use tauri::Manager;
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::window::{Color, Effect, EffectState, EffectsBuilder};
+use tauri::Manager;
 
 /// Tauri アプリケーションを構築・起動する。
 ///
@@ -17,8 +18,13 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(state::FileStore::new())
         .invoke_handler(tauri::generate_handler![
             commands::open_file,
+            commands::open_file_view,
+            commands::get_rows,
+            commands::get_all_rows,
+            commands::close_file,
             commands::save_file
         ])
         .menu(|handle| {
@@ -28,7 +34,13 @@ pub fn run() {
                 true,
                 &[
                     &MenuItem::with_id(handle, "about", "About TSV Viewer", true, None::<&str>)?,
-                    &MenuItem::with_id(handle, "quit", "Quit TSV Viewer", true, Some("CmdOrCtrl+Q"))?,
+                    &MenuItem::with_id(
+                        handle,
+                        "quit",
+                        "Quit TSV Viewer",
+                        true,
+                        Some("CmdOrCtrl+Q"),
+                    )?,
                 ],
             )?;
             Menu::with_items(handle, &[&app_submenu])
